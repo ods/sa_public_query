@@ -79,7 +79,7 @@ engine = create_engine('sqlite://')#, echo=True)
 Base.metadata.create_all(engine)
 
 Session = sessionmaker(bind=engine, query_cls=PublicQuery)
-
+    
 sess = Session()
 
 sess.add_all([
@@ -125,6 +125,16 @@ a1_user_id = a1.user.id
 assert sess.query(User).get(a1_user_id) is not None
 a1.user.public = False
 sess.commit()
+
+assert a1.user is None
+assert sess.query(User).get(a1_user_id) is None
+
+assert sess.query(User).order_by(User.name).first().name=='u2'
+
+assert list(sess.query(User).values(User.name)) == [('u2',), ('u5',)]
+assert sess.query(User.name).all() == [('u2',), ('u5',)]
+assert sess.query(User).count()==2
+
 
 # XXX The following assertions fail:
 
