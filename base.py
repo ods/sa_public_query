@@ -56,7 +56,10 @@ class UserAddressesTest(unittest.TestCase):
                             Address(email='u4a2', public=True)]),
             User(name='u5', public=True,
                  addresses=[Address(email='u5a1', public=True),
-                            Address(email='u5a2', public=False)])
+                            Address(email='u5a2', public=False)]),
+            User(name='u6', public=True,
+                 addresses=[Address(email='u6a1', public=False),
+                            Address(email='u6a2', public=False)]),
         ])
         self.dba.commit()
         self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
@@ -72,36 +75,95 @@ class UserAddressesTest(unittest.TestCase):
         for addr in self.dbp.query(Address):
             self.assertTrue(addr.public)
 
-#assert entries == [
-#    (u'u1a1', u'u1'),
-#    (u'u1a2', u'u1'),
-#    (u'u2a2', u'u2'),
-#    (u'u4a2', None),
-#    (u'u5a1', u'u5'),
-#]
-#
-#a1 = sess.query(Address).filter_by(email='u1a1').one()
-#a1_user_id = a1.user.id
-#assert sess.query(User).get(a1_user_id) is not None
-#a1.user.public = False
-#sess.commit()
-#
-#assert a1.user is None
-#assert sess.query(User).get(a1_user_id) is None
-#
-#assert sess.query(User).order_by(User.name).first().name=='u2'
-#
-#assert list(sess.query(User).values(User.name)) == [('u2',), ('u5',)]
-#assert sess.query(User.name).all() == [('u2',), ('u5',)]
-#assert sess.query(User).count()==2
-#
-#
-## XXX The following assertions fail:
-#
-#assert sess.query(User.name).join(User.addresses).filter(Address.email=='u2a1').all()==[]
-#assert sess.query(User.name).filter(User.addresses.any(email='u2a1')).all()==[]
-#assert sess.query(User.name, Address.email).join(Address.user).all()==[('u2', 'u2a2'), ('u5', 'u5a1')]
-#assert sess.query(Address.email, User.name).join(Address.user).all()==[('u2a2', 'u2'), ('u5a1', 'u5')]
+    def test_query_iter(self):
+        names = [u.name for u in self.dbp.query(User)]
+        self.assertEqual(names, ['u1', 'u2', 'u5', 'u6'])
+        emails = [a.email for a in self.dbp.query(Address)]
+        self.assertEqual(emails, ['u1a1', 'u1a2', 'u2a2', 'u4a2', 'u5a1'])
+
+    def test_query_field(self):
+        names = set(n for (n,) in self.dbp.query(User.name))
+        self.assertEqual(names, set(['u1', 'u2', 'u5', 'u6']))
+        emails = set(e for (e,) in self.dbp.query(Address.email))
+        self.assertEqual(emails, set(['u1a1', 'u1a2', 'u2a2', 'u4a2', 'u5a1']))
+
+    def test_relation_list(self):
+        for name, emails in {'u1': ['u1a1', 'u1a2'],
+                             'u2': ['u2a2'],
+                             'u5': ['u5a1'],
+                             'u6': []}.items():
+            user = self.dbp.query(User).filter_by(name=name).scalar()
+            self.assertEqual(set(a.email for a in user.addresses), set(emails))
+
+    def test_relation_scalar(self):
+        for email, name in {'u1a1': 'u1',
+                            'u1a2': 'u1',
+                            'u2a2': 'u2',
+                            'u4a2': None,
+                            'u5a1': 'u5'}.items():
+            addr = self.dbp.query(Address).filter_by(email=email).scalar()
+            if name is None:
+                self.assertIsNone(addr.user)
+            else:
+                self.assertEqual(addr.user.name, name)
+
+    def test_count(self):
+        self.assertEqual(self.dbp.query(User).count(), 4)
+        self.assertEqual(self.dbp.query(Address).count(), 5)
+
+    def test_get(self):
+        for user_id, in self.dba.query(User.id)\
+                    .filter(User.name.in_(['u1', 'u2', 'u5', 'u6'])):
+            user = self.dbp.query(User).get(user_id)
+            self.assertIsNotNone(user)
+        for user_id, in self.dba.query(User.id)\
+                    .filter(User.name.in_(['u3', 'u4'])):
+            user = self.dbp.query(User).get(user_id)
+            self.assertIsNone(user)
+
+    def test_relation_after_change(self):
+        user = self.dbp.query(User).filter_by(name='u1').scalar()
+        self.assertEqual(len(user.addresses), 2)
+        addr1, addr2 = user.addresses
+        self.assertIsNotNone(addr1.user)
+        self.assertIsNotNone(addr2.user)
+        addr2.public = False
+        self.dbp.commit()
+        self.assertEqual(len(user.addresses), 1)
+        self.assertIsNotNone(addr1.user)
+        user.public = False
+        self.dbp.commit()
+        self.assertIsNone(addr1.user)
+
+    def test_private_by_public_join(self):
+        query = self.dbp.query(User).join(User.addresses)\
+                    .filter(Address.email=='u4a2')
+        self.assertEqual(query.count(), 0)
+        self.assertEqual(query.all(), [])
+
+    def test_private_by_public_exists(self):
+        query = self.dbp.query(User).filter(User.addresses.any(email='u4a2'))
+        self.assertEqual(query.count(), 0)
+        self.assertEqual(query.all(), [])
+
+    def test_public_by_private_join(self):
+        query = self.dbp.query(User).join(User.addresses)\
+                    .filter(Address.email=='u2a1')
+        self.assertEqual(query.count(), 0)
+        self.assertEqual(query.all(), [])
+
+    def test_public_by_private_exists(self):
+        query = self.dbp.query(User).filter(User.addresses.any(email='u2a1'))
+        self.assertEqual(query.count(), 0)
+        self.assertEqual(query.all(), [])
+
+    def test_join_pairs(self):
+        query = self.dbp.query(User.name, Address.email).join(Address.user)
+        self.assertEqual(set(query.all()),
+                         set([('u1', 'u1a1'),
+                              ('u1', 'u1a2'),
+                              ('u2', 'u2a2'),
+                              ('u5', 'u5a1')]))
 
 
 def run_test(query_cls):
