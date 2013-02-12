@@ -1,0 +1,38 @@
+--- sqlalchemy/orm/query.py	2013-02-08 04:10:48.000000000 +0400
++++ query.py	2013-02-12 16:11:22.864007656 +0400
+@@ -336,7 +336,11 @@ class Query(object):
+     def _no_criterion_condition(self, meth):
+         if not self._enable_assertions:
+             return
+-        if self._criterion is not None or \
++        # XXX ods: this method is mostly used in _load_on_ident which is hacked
++        # to use current criterion
++        assert meth=='get' or self._criterion is None
++        #if self._criterion is not None or \
++        if \
+                 self._statement is not None or self._from_obj or \
+                 self._limit is not None or self._offset is not None or \
+                 self._group_by or self._order_by or self._distinct:
+@@ -345,7 +349,8 @@ class Query(object):
+                                 "Query with existing criterion. " % meth)
+ 
+         self._from_obj = ()
+-        self._statement = self._criterion = None
++        #self._statement = self._criterion = None
++        self._statement = None
+         self._order_by = self._group_by = self._distinct = False
+ 
+     def _no_clauseelement_condition(self, meth):
+@@ -2492,7 +2497,11 @@ class Query(object):
+                                                 _get_clause, nones)
+ 
+             _get_clause = q._adapt_clause(_get_clause, True, False)
+-            q._criterion = _get_clause
++            # XXX ods: use current criterion
++            if q._criterion is not None:
++                q._criterion &= _get_clause
++            else:
++                q._criterion = _get_clause
+ 
+             params = dict([
+                 (_get_params[primary_key].key, id_val)
