@@ -21,13 +21,22 @@ class PublicQuery(Query):
 
     def get(self, ident):
         if self._criterion:
-            # Check from DB instead of looking in identity map.
-            # TODO: Verify condition is created by private() method.
-            return Query.get(self.populate_existing(), ident)
-        else:
-            obj = Query.get(self, ident)
-            if obj is not None and getattr(obj, 'public', True):
-                return obj
+            mapper = self._only_full_mapper_zero("get")
+            crit = getattr(mapper.class_, 'public', None)
+            if crit is not None:
+                if not isinstance(crit, ClauseElement):
+                    # This simplest safe way to make bare boolean column
+                    # accepted as expression.
+                    crit = cast(crit, Boolean)
+            if crit!=self._criterion:
+                # We can't verify that criterion is from our private() call.
+                # Check from DB instead of looking in identity map.
+                assert False # XXX temporal to verify it's used
+                return Query.get(self.populate_existing(), ident)
+            assert False # XXX temporal to verify it's used
+        obj = Query.get(self, ident)
+        if obj is not None and getattr(obj, 'public', True):
+            return obj
 
     def __iter__(self):
         return Query.__iter__(self.private())
@@ -49,7 +58,7 @@ class PublicQuery(Query):
                 except AttributeError:
                     # XXX For tables, table columns
                     #pass
-                    raise
+                    raise # XXX temporal, to verify it's used
                 else:
                     crit = getattr(cls, 'public', None)
                     if crit is not None:
