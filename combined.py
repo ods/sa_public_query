@@ -20,13 +20,14 @@ class PublicQuery(Query):
     '''
 
     def get(self, ident):
-        obj = Query.get(self, ident)
-        if obj is not None and getattr(obj, 'public', True):
-            return obj
-        # Other option:
-        # override get() so that the flag is always checked in the 
-        # DB as opposed to pulling from the identity map. - this is optional.
-        #return Query.get(self.populate_existing(), ident)
+        if self._criterion:
+            # Check from DB instead of looking in identity map.
+            # TODO: Verify condition is created by private() method.
+            return Query.get(self.populate_existing(), ident)
+        else:
+            obj = Query.get(self, ident)
+            if obj is not None and getattr(obj, 'public', True):
+                return obj
 
     def __iter__(self):
         return Query.__iter__(self.private())
@@ -56,8 +57,7 @@ class PublicQuery(Query):
                             # This simplest safe way to make bare boolean column
                             # accepted as expression.
                             crit = cast(crit, Boolean)
-                        # XXX It's dangerous since it can mask errors
-                        query = query.enable_assertions(False).filter(crit)
+                        query = query.filter(crit)
         return query
 
 
