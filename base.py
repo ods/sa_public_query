@@ -111,6 +111,10 @@ class UserAddressesTest(unittest.TestCase):
         self.assertEqual(self.dbp.query(User).count(), 4)
         self.assertEqual(self.dbp.query(Address).count(), 5)
 
+    def test_func_count(self):
+        self.assertEqual(self.dbp.query(func.count(User.id)).scalar(), 4)
+        self.assertEqual(self.dbp.query(func.count(Address.id)).scalar(), 5)
+
     def test_get(self):
         for user_id, in self.dba.query(User.id)\
                     .filter(User.name.in_(['u1', 'u2', 'u5', 'u6'])):
