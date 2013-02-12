@@ -169,6 +169,12 @@ class UserAddressesTest(unittest.TestCase):
                               ('u2', 'u2a2'),
                               ('u5', 'u5a1')]))
 
+    def test_relation_group_count(self):
+        query = self.dbp.query(User.name, func.count(Address.id))\
+                        .outerjoin(User.addresses).group_by(User.id)
+        count_by_name = dict(query.all())
+        self.assertEqual(count_by_name, {'u1': 2, 'u2': 1, 'u5': 1, 'u6': 0})
+
 
 def run_test(query_cls):
     UserAddressesTest.QUERY_CLS = query_cls
