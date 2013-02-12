@@ -18,8 +18,8 @@ class PublicQuery(Query):
     the class and boolean (convertable to boolean) value for instance of the
     class.
 
-    A bit modified version of recipe from
-    http://www.sqlalchemy.org/trac/wiki/UsageRecipes/PreFilteredQuery
+    This solution is used by STM in several projects. It's usually based on
+    patched version of SQLAlchemy.
     '''
 
     def __init__(self, entities, *args, **kwargs):
