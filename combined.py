@@ -47,6 +47,11 @@ class PublicQuery(Query):
         # others.
         return Query.from_self(self.private(), *ent)
 
+    def count(self):
+        # Without it it works with slow implementation of count(), while
+        # we often use a faster one from older version.
+        return Query.count(self.private())
+
     def private(self):
         query = self
         for query_entity in self._entities:
