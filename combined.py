@@ -47,6 +47,9 @@ class PublicQuery(Query):
         # others.
         return Query.from_self(self.private(), *ent)
 
+    def count(self):
+        return Query.count(self.private())
+
     def private(self):
         query = self
         for query_entity in self._entities:
