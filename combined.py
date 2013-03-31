@@ -49,28 +49,42 @@ class PublicQuery(Query):
 
     def count(self):
         return Query.count(self.private())
+    
+    def join(self, *ent):
+        query = self.set_entities_crit(self, ent)
+        return Query.join(query, *ent)
 
     def private(self):
         query = self
         for query_entity in self._entities:
-            for entity in query_entity.entities:
-                if hasattr(entity, 'parententity'):
-                    entity = entity.parententity
-                try:
-                    cls = _class_to_mapper(entity).class_
-                except AttributeError:
-                    # XXX For tables, table columns
-                    #pass
-                    raise # XXX temporal, to verify it's used
-                else:
-                    crit = getattr(cls, 'public', None)
-                    if crit is not None:
-                        if not isinstance(crit, ClauseElement):
-                            # This simplest safe way to make bare boolean column
-                            # accepted as expression.
-                            crit = cast(crit, Boolean)
-                        query = query.filter(crit)
+            query = self.set_entities_crit(query, query_entity.entities)
         return query
+
+    def set_entities_crit(self, query, entities):
+        for entity in entities:
+            if hasattr(entity, "property"):
+                entity = entity.property.mapper
+            if hasattr(entity, 'parententity'):
+                entity = entity.parententity
+            try:
+                cls = _class_to_mapper(entity).class_
+            except AttributeError:
+                # XXX For tables, table columns
+                #pass
+                raise # XXX temporal, to verify it's used
+            else:
+                crit = self.get_crit(cls)
+                if crit is not None:
+                    if not isinstance(crit, ClauseElement):
+                        # This simplest safe way to make bare boolean column
+                        # accepted as expression.
+                        crit = cast(crit, Boolean)
+                    query = query.filter(crit)
+        return query
+
+
+    def get_crit(self, cls):
+        return getattr(cls, 'public', None)
 
 
 if __name__=='__main__':

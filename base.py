@@ -2,7 +2,10 @@ import unittest
 from sqlalchemy import *
 from sqlalchemy.orm import *
 from sqlalchemy.ext.declarative import declarative_base
+import logging
 
+#logging.basicConfig()
+#logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
 UserAddressesBase = declarative_base()
 
@@ -14,6 +17,7 @@ class User(UserAddressesBase):
     name = Column(String)
     public = Column(Boolean, nullable=False)
     addresses = relation("Address", backref="user")
+    photos = relation("Photo", secondary="user_photo")
 
 
 class Address(UserAddressesBase):
@@ -22,6 +26,25 @@ class Address(UserAddressesBase):
     id = Column(Integer, primary_key=True)
     email = Column(String)
     user_id = Column(Integer, ForeignKey('user.id'))
+    public = Column(Boolean, nullable=False)
+
+
+class User_Photo(UserAddressesBase):
+    __tablename__ = 'user_photo'
+
+    user_id = Column(Integer, ForeignKey('user.id'))
+    photo_id = Column(Integer, ForeignKey('photo.id'))
+    
+    __table_args__ = (
+        PrimaryKeyConstraint('user_id', 'photo_id'), {},
+    )
+
+
+class Photo(UserAddressesBase):
+    __tablename__ = 'photo'
+
+    id = Column(Integer, primary_key=True)
+    photo = Column(String)
     public = Column(Boolean, nullable=False)
 
 
@@ -44,22 +67,34 @@ class UserAddressesTest(unittest.TestCase):
         self.dba.add_all([
             User(name='u1', public=True,
                  addresses=[Address(email='u1a1', public=True),
-                            Address(email='u1a2', public=True)]),
+                            Address(email='u1a2', public=True)],
+                 photos=[Photo(photo='u1p1', public=True),
+                         Photo(photo='u1p2', public=True)]),
             User(name='u2', public=True,
                  addresses=[Address(email='u2a1', public=False),
-                            Address(email='u2a2', public=True)]),
+                            Address(email='u2a2', public=True)],
+                 photos=[Photo(photo='u2p1', public=False),
+                         Photo(photo='u2p2', public=True)]),
             User(name='u3', public=False,
                  addresses=[Address(email='u3a1', public=False),
-                            Address(email='u3a2', public=False)]),
+                            Address(email='u3a2', public=False)],
+                 photos=[Photo(photo='u3p1', public=False),
+                         Photo(photo='u3p2', public=False)]),
             User(name='u4', public=False,
                  addresses=[Address(email='u4a1', public=False),
-                            Address(email='u4a2', public=True)]),
+                            Address(email='u4a2', public=True)],
+                 photos=[Photo(photo='u3p1', public=False),
+                         Photo(photo='u3p2', public=False)]),
             User(name='u5', public=True,
                  addresses=[Address(email='u5a1', public=True),
-                            Address(email='u5a2', public=False)]),
+                            Address(email='u5a2', public=False)],
+                 photos=[Photo(photo='u5p1', public=True),
+                         Photo(photo='u5p2', public=False)]),
             User(name='u6', public=True,
                  addresses=[Address(email='u6a1', public=False),
-                            Address(email='u6a2', public=False)]),
+                            Address(email='u6a2', public=False)],
+                 photos=[Photo(photo='u6p1', public=False),
+                         Photo(photo='u6p2', public=False)]),
         ])
         self.dba.commit()
         self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
@@ -94,6 +129,14 @@ class UserAddressesTest(unittest.TestCase):
                              'u6': []}.items():
             user = self.dbp.query(User).filter_by(name=name).scalar()
             self.assertEqual(set(a.email for a in user.addresses), set(emails))
+
+    def test_mtm_relation_list(self):
+        for name, photos in {'u1': ['u1p1', 'u1p2'],
+                             'u2': ['u2p2'],
+                             'u5': ['u5p1'],
+                             'u6': []}.items():
+            user = self.dbp.query(User).filter_by(name=name).scalar()
+            self.assertEqual(set(a.photo for a in user.photos), set(photos))
 
     def test_relation_scalar(self):
         for email, name in {'u1a1': 'u1',
@@ -156,6 +199,12 @@ class UserAddressesTest(unittest.TestCase):
         self.assertEqual(query.count(), 0)
         self.assertEqual(query.all(), [])
 
+    def test_mtm_public_by_private_join(self):
+        query = self.dbp.query(User).join(User.photos)\
+                    .filter(Photo.photo=='u2p1')
+        self.assertEqual(query.count(), 0)
+        self.assertEqual(query.all(), [])
+
     def test_public_by_private_exists(self):
         query = self.dbp.query(User).filter(User.addresses.any(email='u2a1'))
         self.assertEqual(query.count(), 0)
@@ -174,6 +223,16 @@ class UserAddressesTest(unittest.TestCase):
                         .outerjoin(User.addresses).group_by(User.id)
         count_by_name = dict(query.all())
         self.assertEqual(count_by_name, {'u1': 2, 'u2': 1, 'u5': 1, 'u6': 0})
+
+    def test_joinedload(self):
+        for name, emails in {'u1': ['u1a1', 'u1a2'],
+                             'u2': ['u2a2'],
+                             'u5': ['u5a1'],
+                             'u6': []}.items():
+            user = self.dbp.query(User).filter_by(name=name).\
+                            options(joinedload(User.addresses)).\
+                            scalar()
+            self.assertEqual(set(a.email for a in user.addresses), set(emails))
 
 
 def run_test(query_cls):
