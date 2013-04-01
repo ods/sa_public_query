@@ -52,26 +52,34 @@ class PublicQuery(Query):
         # we often use a faster one from older version.
         return Query.count(self.private())
 
+    def _add_entity_criterion(self, entity):
+        #if hasattr(entity, "property"):
+        #    entity = entity.property.mapper
+        if hasattr(entity, 'parententity'):
+            entity = entity.parententity
+        try:
+            cls = _class_to_mapper(entity).class_
+        except AttributeError:
+            # XXX For tables, table columns
+            #pass
+            raise # XXX temporal, to verify it's used
+        else:
+            crit = getattr(cls, 'public', None)
+            if crit is not None:
+                if not isinstance(crit, ClauseElement):
+                    # This simplest safe way to make bare boolean column
+                    # accepted as expression.
+                    crit = cast(crit, Boolean)
+                return self.filter(crit)
+        return self
+
     def private(self):
         query = self
         for query_entity in self._entities:
             for entity in query_entity.entities:
-                if hasattr(entity, 'parententity'):
-                    entity = entity.parententity
-                try:
-                    cls = _class_to_mapper(entity).class_
-                except AttributeError:
-                    # XXX For tables, table columns
-                    #pass
-                    raise # XXX temporal, to verify it's used
-                else:
-                    crit = getattr(cls, 'public', None)
-                    if crit is not None:
-                        if not isinstance(crit, ClauseElement):
-                            # This simplest safe way to make bare boolean column
-                            # accepted as expression.
-                            crit = cast(crit, Boolean)
-                        query = query.filter(crit)
+                query = query._add_entity_criterion(entity)
+        for entity in self._join_entities:
+            query = query._add_entity_criterion(entity)
         return query
 
 
