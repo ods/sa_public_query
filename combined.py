@@ -22,20 +22,26 @@ class PublicQuery(Query):
     def get(self, ident):
         if self._criterion:
             mapper = self._only_full_mapper_zero("get")
-            crit = getattr(mapper.class_, 'public', None)
-            if crit is not None:
-                if not isinstance(crit, ClauseElement):
-                    # This simplest safe way to make bare boolean column
-                    # accepted as expression.
-                    crit = cast(crit, Boolean)
-            if crit!=self._criterion:
-                # We can't verify that criterion is from our private() call.
-                # Check from DB instead of looking in identity map.
-                assert False # XXX temporal to verify it's used
-                return Query.get(self.populate_existing(), ident)
+            # Don't use getattr/hasattr to check public existence, since this
+            # might misinterpret a bug (AttributeError raised by some code in
+            # property implementation) as missing attribute and cause all
+            # private data going to public.
+            if 'public' in dir(mapper.class_):
+                crit = mapper.class_.public
+                if crit is not None:
+                    if not isinstance(crit, ClauseElement):
+                        # This simplest safe way to make bare boolean column
+                        # accepted as expression.
+                        crit = cast(crit, Boolean)
+                    if crit!=self._criterion:
+                        # We can't verify that criterion is from our private()
+                        # call.  Check from DB instead of looking in identity
+                        # map.
+                        assert False # XXX temporal to verify it's used
+                        return Query.get(self.populate_existing(), ident)
             assert False # XXX temporal to verify it's used
         obj = Query.get(self, ident)
-        if obj is not None and getattr(obj, 'public', True):
+        if obj is not None and ('public' not in dir(obj) or obj.public):
             return obj
 
     def __iter__(self):
@@ -64,13 +70,14 @@ class PublicQuery(Query):
             #pass
             raise # XXX temporal, to verify it's used
         else:
-            crit = getattr(cls, 'public', None)
-            if crit is not None:
-                if not isinstance(crit, ClauseElement):
-                    # This simplest safe way to make bare boolean column
-                    # accepted as expression.
-                    crit = cast(crit, Boolean)
-                return self.filter(crit)
+            if 'public' in dir(cls):
+                crit = cls.public
+                if crit is not None:
+                    if not isinstance(crit, ClauseElement):
+                        # This simplest safe way to make bare boolean column
+                        # accepted as expression.
+                        crit = cast(crit, Boolean)
+                    return self.filter(crit)
         return self
 
     def private(self):
