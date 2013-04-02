@@ -2,12 +2,13 @@ import unittest
 from sqlalchemy import *
 from sqlalchemy.orm import *
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property
 
 
-UserAddressesBase = declarative_base()
+Base = declarative_base()
 
 
-class User(UserAddressesBase):
+class User(Base):
     __tablename__ = 'user'
 
     id = Column(Integer, primary_key=True)
@@ -17,7 +18,7 @@ class User(UserAddressesBase):
     photos = relation("Photo", secondary="user_photo")
 
 
-class Address(UserAddressesBase):
+class Address(Base):
     __tablename__ = 'address'
 
     id = Column(Integer, primary_key=True)
@@ -26,19 +27,29 @@ class Address(UserAddressesBase):
     public = Column(Boolean, nullable=False)
 
 
-class User_Photo(UserAddressesBase):
+class User_Photo(Base):
     __tablename__ = 'user_photo'
 
     user_id = Column(ForeignKey('user.id'), nullable=False, primary_key=True)
     photo_id = Column(ForeignKey('photo.id'), nullable=False, primary_key=True)
 
 
-class Photo(UserAddressesBase):
+class Photo(Base):
     __tablename__ = 'photo'
 
     id = Column(Integer, primary_key=True)
     photo = Column(String)
     public = Column(Boolean, nullable=False)
+
+
+class WithAttributeError(Base):
+    __tablename__ = 'with_attribute_error'
+
+    id = Column(Integer, primary_key=True)
+    @hybrid_property
+    def public(self):
+        # Mimic nested error
+        raise AttributeError('some_attribute')
 
 
 class UserAddressesTest(unittest.TestCase):
@@ -51,7 +62,7 @@ class UserAddressesTest(unittest.TestCase):
 
     def setUp(self):
         engine = create_engine('sqlite://')#, echo=True)
-        UserAddressesBase.metadata.create_all(engine)
+        Base.metadata.create_all(engine)
         # Some solutions doen't allow creating objects with PublicQuery, so we
         # setup separate session for it.
         # dba = (all) session with standard Query class
@@ -88,6 +99,7 @@ class UserAddressesTest(unittest.TestCase):
                             Address(email='u6a2', public=False)],
                  photos=[Photo(photo='u6p1', public=False),
                          Photo(photo='u6p2', public=False)]),
+            WithAttributeError(),
         ])
         self.dba.commit()
         self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
@@ -226,6 +238,11 @@ class UserAddressesTest(unittest.TestCase):
                             options(joinedload(User.addresses)).\
                             scalar()
             self.assertEqual(set(a.email for a in user.addresses), set(emails))
+
+    def test_attribute_error(self):
+        # Test for possible security issue due to misinterpreted AttibuteError
+        with self.assertRaises(AttributeError):
+            self.dbp.query(WithAttributeError).all()
 
 
 def run_test(query_cls):
