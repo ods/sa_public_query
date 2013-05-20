@@ -253,7 +253,12 @@ class UserAddressesTest(unittest.TestCase):
     def test_limit(self):
         users = self.dbp.query(User)[:3]
         self.assertEqual(set([x.name for x in users])
-                         ['u1', 'u2', 'u4'])
+                         ['u1', 'u2', 'u5'])
+
+    def test_offset(self):
+        users = self.dbp.query(User)[1:]
+        self.assertEqual(set([x.name for x in users])
+                         ['u2', 'u5', 'u6'])
 
 
 def run_test(query_cls):
