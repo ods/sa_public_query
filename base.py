@@ -250,6 +250,11 @@ class UserAddressesTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             self.dbp.query(WithAttributeError).all()
 
+    def test_limit(self):
+        users = self.dbp.query(User)[:3]
+        self.assertEqual(set([x.name for x in users])
+                         ['u1', 'u2', 'u4'])
+
 
 def run_test(query_cls):
     UserAddressesTest.QUERY_CLS = query_cls
