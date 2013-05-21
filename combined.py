@@ -93,10 +93,10 @@ class PublicQuery(Query):
         return q
 
     def offset(self, offset):
-        return Query.offset(self.private(), offset)
+        return self.private().offset(offset)
 
     def limit(self, limit):
-        return Query.limit(self.private(), limit)
+        return self.private().limit(limit)
 
     def slice(self, start, stop):
         return self.private().slice(start, stop)
