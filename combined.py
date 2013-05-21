@@ -87,7 +87,19 @@ class PublicQuery(Query):
                 query = query._add_entity_criterion(entity)
         for entity in self._join_entities:
             query = query._add_entity_criterion(entity)
-        return query
+
+        q = Query.__new__(Query)
+        q.__dict__ = query.__dict__.copy()
+        return q
+
+    def offset(self, offset):
+        return Query.offset(self.private(), offset)
+
+    def limit(self, limit):
+        return Query.limit(self.private(), limit)
+
+    def slice(self, start, stop):
+        return self.private().slice(start, stop)
 
 
 if __name__=='__main__':
