@@ -251,15 +251,19 @@ class UserAddressesTest(unittest.TestCase):
             self.dbp.query(WithAttributeError).all()
 
     def test_limit(self):
-        users = self.dbp.query(User)[:3]
+        users = self.dbp.query(User).limit(3)
         self.assertEqual(set([x.name for x in users]),
-                         ['u1', 'u2', 'u5'])
+                         set(['u1', 'u2', 'u5']))
 
     def test_offset(self):
-        users = self.dbp.query(User)[1:]
+        users = self.dbp.query(User).offset(1)
         self.assertEqual(set([x.name for x in users]),
-                         ['u2', 'u5', 'u6'])
+                         set(['u2', 'u5', 'u6']))
 
+    def test_slice(self):
+        users = self.dbp.query(User)[0:3]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u1', 'u2', 'u5']))
 
 def run_test(query_cls):
     UserAddressesTest.QUERY_CLS = query_cls
