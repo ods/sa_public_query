@@ -58,6 +58,15 @@ class PublicQuery(Query):
         # we often use a faster one from older version.
         return Query.count(self.private())
 
+    def slice(self, start, stop):
+        return Query.slice(self.private(), start, stop)
+
+    def limit(self, limit):
+        return Query.limit(self.private(), limit)
+
+    def offset(self, offset):
+        return Query.offset(self.private(), offset)
+
     def _add_entity_criterion(self, entity):
         #if hasattr(entity, "property"):
         #    entity = entity.property.mapper
@@ -81,6 +90,10 @@ class PublicQuery(Query):
         return self
 
     def private(self):
+        if self._limit or self._offset:
+            # Conditions must be added just before setting LIMIT and OFFSET
+            assert self._criterion is not None
+            return self
         query = self
         for query_entity in self._entities:
             for entity in query_entity.entities:
