@@ -261,9 +261,25 @@ class UserAddressesTest(unittest.TestCase):
                          set(['u2', 'u5', 'u6']))
 
     def test_slice(self):
-        users = self.dbp.query(User)[0:3]
+        users = self.dbp.query(User)[:3]
         self.assertEqual(set([x.name for x in users]),
                          set(['u1', 'u2', 'u5']))
+        users = self.dbp.query(User)[:]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u1', 'u2', 'u5', 'u6']))
+        users = self.dbp.query(User)[:-1]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u1', 'u2', 'u5']))
+        users = self.dbp.query(User)[1:]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u2', 'u5', 'u6']))
+        users = self.dbp.query(User)[1:3]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u2', 'u5']))
+        users = self.dbp.query(User)[::2]
+        self.assertEqual(set([x.name for x in users]),
+                         set(['u1', 'u5']))
+
 
 def run_test(query_cls):
     UserAddressesTest.QUERY_CLS = query_cls
