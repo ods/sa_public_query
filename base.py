@@ -85,6 +85,12 @@ class Announce(Doc):
     __mapper_args__ = {'polymorphic_identity': Doc.ANNOUNCE}
 
 
+class NotFiltered(Base):
+    __tablename__ = 'not_filtered'
+
+    id = Column(Integer, nullable=False, primary_key=True)
+
+
 class UserAddressesTest(unittest.TestCase):
     '''
     Simple set of tests with the same set of initial objects from original
@@ -135,6 +141,10 @@ class UserAddressesTest(unittest.TestCase):
             WithAttributeError(),
             News(title='n1', public=True),
             Announce(title='a1', public=True, date_start='tomorrow'),
+            NotFiltered(id=1),
+            NotFiltered(id=2),
+            NotFiltered(id=3),
+            NotFiltered(id=4),
         ])
         self.dba.commit()
         self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
@@ -314,6 +324,16 @@ class UserAddressesTest(unittest.TestCase):
         users = self.dbp.query(User)[::2]
         self.assertEqual(set([x.name for x in users]),
                          set(['u1', 'u5']))
+
+    def test_limit_not_filtered(self):
+        obj = self.dbp.query(NotFiltered).limit(1)[0]
+        self.assertEqual(obj.id, 1)
+
+        obj = self.dbp.query(NotFiltered).offset(1)[0]
+        self.assertEqual(obj.id, 2)
+
+        obj = self.dbp.query(NotFiltered)[1:2][0]
+        self.assertEqual(obj.id, 2)
 
     def test_subclass_lazy(self):
         doc = self.dbp.query(Doc).filter_by(title='a1').scalar()
