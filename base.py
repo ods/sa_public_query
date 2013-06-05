@@ -51,6 +51,39 @@ class WithAttributeError(Base):
         # Mimic nested error
         raise AttributeError('some_attribute')
 
+class Doc(Base):
+    __tablename__ = 'doc'
+
+    NEWS = 1
+    ANNOUNCE = 2
+
+    id = Column(Integer, primary_key=True)
+    type = Column(Integer)
+    title = Column(String)
+    public = Column(Boolean)
+
+    __mapper_args__ = {'polymorphic_on': type}
+
+    def __new__(cls, **initial):
+        if 'type' in initial:
+            cls = {Doc.NEWS: News,
+                   Doc.ANNOUNCE: Announce}[initial['type']]
+        return Base.__new__(cls)
+
+
+class News(Doc):
+
+    __mapper_args__ = {'polymorphic_identity': Doc.NEWS}
+
+
+class Announce(Doc):
+    __tablename__ = 'announce'
+
+    id = Column(Integer, ForeignKey(Doc.id), nullable=False, primary_key=True)
+    date_start = Column(String)
+
+    __mapper_args__ = {'polymorphic_identity': Doc.ANNOUNCE}
+
 
 class UserAddressesTest(unittest.TestCase):
     '''
@@ -100,6 +133,8 @@ class UserAddressesTest(unittest.TestCase):
                  photos=[Photo(photo='u6p1', public=False),
                          Photo(photo='u6p2', public=False)]),
             WithAttributeError(),
+            News(title='n1', public=True),
+            Announce(title='a1', public=True, date_start='tomorrow'),
         ])
         self.dba.commit()
         self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
@@ -279,6 +314,10 @@ class UserAddressesTest(unittest.TestCase):
         users = self.dbp.query(User)[::2]
         self.assertEqual(set([x.name for x in users]),
                          set(['u1', 'u5']))
+
+    def test_subclass_lazy(self):
+        doc = self.dbp.query(Doc).filter_by(title='a1').scalar()
+        assert doc.date_start == 'tomorrow'
 
 
 def run_test(query_cls):
