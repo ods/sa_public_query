@@ -92,7 +92,6 @@ class PublicQuery(Query):
     def private(self):
         if self._limit or self._offset:
             # Conditions must be added just before setting LIMIT and OFFSET
-            assert self._criterion is not None
             return self
         query = self
         for query_entity in self._entities:
