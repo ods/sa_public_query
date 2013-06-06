@@ -337,7 +337,7 @@ class UserAddressesTest(unittest.TestCase):
 
     def test_subclass_lazy(self):
         doc = self.dbp.query(Doc).filter_by(title='a1').scalar()
-        assert doc.date_start == 'tomorrow'
+        self.assertEqual(doc.date_start, 'tomorrow')
 
 
 def run_test(query_cls):
