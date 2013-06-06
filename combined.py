@@ -90,8 +90,12 @@ class PublicQuery(Query):
         return self
 
     def private(self):
-        if self._limit or self._offset:
+        if self._limit is not None or self._offset is not None \
+                or self._statement is not None:
             # Conditions must be added just before setting LIMIT and OFFSET
+            # Calling it with statement means from_statement was used: either
+            # manually (it's your problem) or by load_scalar_attributes (no
+            # need in filtering here).
             return self
         query = self
         for query_entity in self._entities:
