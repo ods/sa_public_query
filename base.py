@@ -1,11 +1,34 @@
 import unittest
 from sqlalchemy import *
 from sqlalchemy.orm import *
+from sqlalchemy.sql.expression import Alias
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property
-
+from sqlalchemy.sql import ClauseElement
 
 Base = declarative_base()
+
+class PublicAlias(Alias):
+    def __init__(self, *args, **kwargs):
+        self.private_table = kwargs.pop('private_table')
+        Alias.__init__(self, *args, **kwargs)
+
+def public_mapper(cls, table, **kwargs):
+    if 'public' in dir(cls):
+        crit = cls.public
+        if table is not None and crit is not None:
+            if not isinstance(crit, ClauseElement):
+                # This simplest safe way to make bare boolean column
+                # accepted as expression.
+                crit = cast(crit, Boolean)
+            table = PublicAlias(table.select().where(crit),
+                                private_table=table)
+    return mapper(cls, table, **kwargs)
+
+
+class PrivateQuery(Query):
+    # XXX Implement and provide tests
+    pass
 
 
 class User(Base):
@@ -17,6 +40,8 @@ class User(Base):
     addresses = relation("Address", backref="user")
     photos = relation("Photo", secondary="user_photo")
 
+    __mapper_cls__ = public_mapper
+
 
 class Address(Base):
     __tablename__ = 'address'
@@ -25,6 +50,8 @@ class Address(Base):
     email = Column(String)
     user_id = Column(Integer, ForeignKey('user.id'))
     public = Column(Boolean, nullable=False)
+
+    __mapper_cls__ = public_mapper
 
 
 class User_Photo(Base):
@@ -41,15 +68,9 @@ class Photo(Base):
     photo = Column(String)
     public = Column(Boolean, nullable=False)
 
+    __mapper_cls__ = public_mapper
 
-class WithAttributeError(Base):
-    __tablename__ = 'with_attribute_error'
 
-    id = Column(Integer, primary_key=True)
-    @hybrid_property
-    def public(self):
-        # Mimic nested error
-        raise AttributeError('some_attribute')
 
 class Doc(Base):
     __tablename__ = 'doc'
@@ -62,6 +83,7 @@ class Doc(Base):
     title = Column(String)
     public = Column(Boolean)
 
+    __mapper_cls__ = public_mapper
     __mapper_args__ = {'polymorphic_on': type}
 
     def __new__(cls, **initial):
@@ -73,6 +95,7 @@ class Doc(Base):
 
 class News(Doc):
 
+    __mapper_cls__ = public_mapper
     __mapper_args__ = {'polymorphic_identity': Doc.NEWS}
 
 
@@ -82,6 +105,7 @@ class Announce(Doc):
     id = Column(Integer, ForeignKey(Doc.id), nullable=False, primary_key=True)
     date_start = Column(String)
 
+    __mapper_cls__ = public_mapper
     __mapper_args__ = {'polymorphic_identity': Doc.ANNOUNCE}
 
 
@@ -138,7 +162,6 @@ class UserAddressesTest(unittest.TestCase):
                             Address(email='u6a2', public=False)],
                  photos=[Photo(photo='u6p1', public=False),
                          Photo(photo='u6p2', public=False)]),
-            WithAttributeError(),
             News(title='n1', public=True),
             Announce(title='a1', public=True, date_start='tomorrow'),
             NotFiltered(id=1),
@@ -147,7 +170,7 @@ class UserAddressesTest(unittest.TestCase):
             NotFiltered(id=4),
         ])
         self.dba.commit()
-        self.dbp = sessionmaker(bind=engine, query_cls=self.QUERY_CLS)()
+        self.dbp = sessionmaker(bind=engine)()
 
     def tearDown(self):
         self.dba.close()
@@ -165,6 +188,12 @@ class UserAddressesTest(unittest.TestCase):
         self.assertEqual(names, ['u1', 'u2', 'u5', 'u6'])
         emails = [a.email for a in self.dbp.query(Address)]
         self.assertEqual(emails, ['u1a1', 'u1a2', 'u2a2', 'u4a2', 'u5a1'])
+
+    def test_private_query_iter(self):
+        names = [u.name for u in self.dbp.query(User)]
+        self.assertEqual(names, ['u1', 'u2', 'u3', 'u4', 'u5', 'u6'])
+        #emails = [a.email for a in self.dbp.query(Address)]
+        #self.assertEqual(emails, ['u1a1', 'u1a2', 'u2a2', 'u4a2', 'u5a1'])
 
     def test_query_field(self):
         names = set(n for (n,) in self.dbp.query(User.name))
@@ -293,6 +322,18 @@ class UserAddressesTest(unittest.TestCase):
     def test_attribute_error(self):
         # Test for possible security issue due to misinterpreted AttibuteError
         with self.assertRaises(AttributeError):
+            class WithAttributeError(Base):
+                __tablename__ = 'with_attribute_error'
+
+                id = Column(Integer, primary_key=True)
+                @hybrid_property
+                def public(self):
+                    # Mimic nested error
+                    raise AttributeError('some_attribute')
+
+                __mapper_cls__ = public_mapper
+
+
             self.dbp.query(WithAttributeError).all()
 
     def test_limit(self):
@@ -340,7 +381,6 @@ class UserAddressesTest(unittest.TestCase):
         self.assertEqual(doc.date_start, 'tomorrow')
 
 
-def run_test(query_cls):
-    UserAddressesTest.QUERY_CLS = query_cls
+def run_test():
     suite = unittest.TestLoader().loadTestsFromTestCase(UserAddressesTest)
     unittest.TextTestRunner().run(suite)
